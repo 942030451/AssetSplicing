@@ -38,6 +38,7 @@ class TaskTable(QTableWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(0, len(self.HEADERS), parent)
         self._task_items: Dict[str, dict] = {}
+        self._actions_enabled: bool = True
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -115,6 +116,7 @@ class TaskTable(QTableWidget):
 
         # 操作：移除按钮
         btn_remove = QPushButton("移除")
+        btn_remove.setEnabled(self._actions_enabled)
         btn_remove.setStyleSheet(
             "QPushButton { background-color: #3f3f46; color: #f4f4f5; border: none; padding: 2px 8px; border-radius: 4px; }"
             "QPushButton:hover { background-color: #ef4444; color: #ffffff; }"
@@ -165,19 +167,33 @@ class TaskTable(QTableWidget):
             return self._task_items[task_id].get("status_text", "")
         return ""
 
+    def set_actions_enabled(self, enabled: bool) -> None:
+        """启用或禁用所有行内的操作按钮。"""
+        self._actions_enabled = enabled
+        for r in range(self.rowCount()):
+            widget = self.cellWidget(r, self.COL_ACTION)
+            if widget:
+                btn = widget.findChild(QPushButton)
+                if btn:
+                    btn.setEnabled(enabled)
+
     def update_split_ratio(self, split_ratio: int) -> None:
-        """更新所有行的目标比例规格显示。"""
+        """更新未完成任务的目标比例规格显示。"""
         for r in range(self.rowCount()):
             task_id = self.get_task_id_by_row(r)
             if task_id and task_id in self._task_items:
-                self._task_items[task_id]["split_ratio"] = split_ratio
-                media_info = self._task_items[task_id]["info"]
-                target_str = self.calculate_target_resolution(media_info, split_ratio)
-                item = self.item(r, self.COL_TARGET_RES)
-                if item:
-                    item.setText(target_str)
+                item_data = self._task_items[task_id]
+                if item_data.get("status") != "completed":
+                    item_data["split_ratio"] = split_ratio
+                    media_info = item_data["info"]
+                    target_str = self.calculate_target_resolution(media_info, split_ratio)
+                    item = self.item(r, self.COL_TARGET_RES)
+                    if item:
+                        item.setText(target_str)
 
     def remove_task(self, task_id: str) -> None:
+        if not self._actions_enabled:
+            return
         row = self.get_row_by_task_id(task_id)
         if row != -1:
             self.remove_row_by_index(row)

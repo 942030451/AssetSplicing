@@ -7,8 +7,9 @@ import sys
 from typing import List, Optional
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFileDialog,
     QGroupBox,
@@ -233,23 +234,44 @@ class MainWindow(QMainWindow):
         if selected_dir:
             self.edit_custom_dir.setText(selected_dir)
 
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """窗口关闭时安全拦截并中止正在运行的转码任务。"""
+        if self._is_processing and self.worker and self.worker.isRunning():
+            self.cancel_processing()
+            try:
+                self.worker.wait(2000)
+            except Exception:
+                pass
+        event.accept()
+
     def on_files_dropped(self, paths: List[Path]) -> None:
         """接收拖拽或选择的文件并使用 probe 解析入队。"""
         valid_count = 0
+        skipped_count = 0
         for p in paths:
             info = self.probe.probe(p)
             if info is not None:
                 tid = self.task_table.add_task_item(p, info, split_ratio=self.current_ratio)
                 if tid:
                     valid_count += 1
+                else:
+                    skipped_count += 1
+            else:
+                skipped_count += 1
+            QApplication.processEvents()
 
         self.update_ui_state()
-        if valid_count > 0:
+        if skipped_count > 0:
+            self.statusBar().showMessage(f"已添加 {valid_count} 个任务，跳过 {skipped_count} 个无法解析的文件")
+        elif valid_count > 0:
             self.statusBar().showMessage(f"已添加 {valid_count} 个任务")
 
     def update_ui_state(self) -> None:
         is_processing = self._is_processing and (self.worker is not None and bool(self.worker.isRunning()))
         has_tasks = self.task_table.rowCount() > 0
+
+        self.drop_zone.setEnabled(not is_processing)
+        self.task_table.set_actions_enabled(not is_processing)
 
         self.btn_start.setEnabled(has_tasks and not is_processing)
         self.btn_cancel.setEnabled(is_processing)
@@ -295,10 +317,15 @@ class MainWindow(QMainWindow):
             self.btn_cancel.setEnabled(False)
 
     def on_processing_finished(self) -> None:
+        is_cancelled = bool(self.worker and getattr(self.worker, "_is_cancelled", False))
         self._is_processing = False
         self.update_ui_state()
-        self.lbl_status.setText("批量处理完成")
-        self.statusBar().showMessage("所有任务处理完毕")
+        if is_cancelled:
+            self.lbl_status.setText("处理已中止")
+            self.statusBar().showMessage("用户已中止批量处理")
+        else:
+            self.lbl_status.setText("批量处理完成")
+            self.statusBar().showMessage("所有任务处理完毕")
 
     def clear_tasks(self) -> None:
         self.task_table.clear_tasks()

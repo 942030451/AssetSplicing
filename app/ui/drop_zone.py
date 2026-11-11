@@ -34,6 +34,10 @@ QFrame#dropZone:hover {
     border-color: #3b82f6;
     background-color: #232734;
 }
+QFrame#dropZone:disabled {
+    background-color: #18181b;
+    border: 2px dashed #27272a;
+}
 """
 
 DRAG_OVER_STYLE = """
@@ -92,6 +96,9 @@ class DropZone(QFrame):
         return valid_paths
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if not self.isEnabled():
+            event.ignore()
+            return
         if event.mimeData().hasUrls():
             valid_files = self._extract_supported_files(event.mimeData())
             if valid_files:
@@ -101,6 +108,9 @@ class DropZone(QFrame):
         event.ignore()
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if not self.isEnabled():
+            event.ignore()
+            return
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
         else:
@@ -112,6 +122,9 @@ class DropZone(QFrame):
 
     def dropEvent(self, event: QDropEvent) -> None:
         self.setStyleSheet(NORMAL_STYLE)
+        if not self.isEnabled():
+            event.ignore()
+            return
         valid_files = self._extract_supported_files(event.mimeData())
         if valid_files:
             event.acceptProposedAction()
@@ -120,6 +133,8 @@ class DropZone(QFrame):
             event.ignore()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        if not self.isEnabled():
+            return
         if event.button() == Qt.MouseButton.LeftButton:
             ext_filter = (
                 "媒体文件 (*.mp4 *.mov *.mkv *.avi *.flv *.webm *.m4v *.wmv *.jpg *.jpeg *.png *.webp *.bmp *.tiff);;"

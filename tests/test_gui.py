@@ -172,6 +172,7 @@ def test_add_files_via_probe(qtbot, tmp_path, sample_video_info, sample_image_in
     # 成功添加 2 个合法媒体任务，坏文件被过滤
     assert window.task_table.rowCount() == 2
     assert window.btn_start.isEnabled()
+    assert "跳过 1 个无法解析的文件" in window.statusBar().currentMessage()
 
     # 重复添加 clip.mp4 不应重复入队
     with patch.object(window.probe, "probe", side_effect=mock_probe):
@@ -217,14 +218,20 @@ def test_start_and_cancel_button_state_toggle(qtbot, tmp_path, sample_video_info
     # 模拟启动处理（mock BatchProcessorThread 避免真正执行 ffmpeg）
     with patch("app.ui.main_window.BatchProcessorThread") as MockThread:
         mock_thread_instance = MagicMock()
+        mock_thread_instance._is_cancelled = False
+        def fake_cancel():
+            mock_thread_instance._is_cancelled = True
+        mock_thread_instance.cancel.side_effect = fake_cancel
         MockThread.return_value = mock_thread_instance
 
         window.btn_start.click()
 
-        # 启动后，开始按钮禁用，中止按钮启用
+        # 启动后，开始按钮禁用，中止按钮启用，拖拽区和行移除锁定
         assert not window.btn_start.isEnabled()
         assert window.btn_cancel.isEnabled()
         assert not window.btn_clear.isEnabled()
+        assert not window.drop_zone.isEnabled()
+        assert not window.task_table._actions_enabled
 
         # 模拟点击中止
         window.btn_cancel.click()
@@ -235,6 +242,10 @@ def test_start_and_cancel_button_state_toggle(qtbot, tmp_path, sample_video_info
         assert window.btn_start.isEnabled()
         assert not window.btn_cancel.isEnabled()
         assert window.btn_clear.isEnabled()
+        assert window.drop_zone.isEnabled()
+        assert window.task_table._actions_enabled
+        assert window.lbl_status.text() == "处理已中止"
+        assert window.statusBar().currentMessage() == "用户已中止批量处理"
 
 
 def test_custom_output_dir_selection(qtbot, tmp_path, sample_video_info):
@@ -318,3 +329,49 @@ def test_app_main_creation():
     app = create_app([])
     assert app is not None
     assert app.applicationName() == "Asset Splicer"
+
+
+def test_close_event_cancels_running_worker(qtbot, tmp_path, sample_video_info):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    f1 = tmp_path / "task.mp4"
+    f1.write_text("video")
+    window.task_table.add_task_item(f1, sample_video_info, split_ratio=2)
+
+    mock_worker = MagicMock()
+    mock_worker.isRunning.return_value = True
+    window.worker = mock_worker
+    window._is_processing = True
+
+    from PySide6.QtGui import QCloseEvent
+    event = QCloseEvent()
+    window.closeEvent(event)
+
+    mock_worker.cancel.assert_called_once()
+    mock_worker.wait.assert_called_with(2000)
+    assert event.isAccepted()
+
+
+def test_ratio_switching_locks_completed_task(qtbot, tmp_path, sample_video_info):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    f1 = tmp_path / "task1.mp4"
+    f1.write_text("v1")
+    f2 = tmp_path / "task2.mp4"
+    f2.write_text("v2")
+
+    t1 = window.task_table.add_task_item(f1, sample_video_info, split_ratio=2)
+    t2 = window.task_table.add_task_item(f2, sample_video_info, split_ratio=2)
+
+    # 标记任务 1 已完成
+    window.task_table.set_task_completed(t1, str(tmp_path / "out1.mp4"))
+    assert "960 × 2160" in window.task_table.get_target_resolution_text(0)
+
+    # 切换比例为 1/3
+    window.radio_ratio_3.setChecked(True)
+
+    # 任务 1 已完成，保持原比例规格锁定；任务 2 未完成，更新为新比例规格
+    assert "960 × 2160" in window.task_table.get_target_resolution_text(0)
+    assert "640 × 3240" in window.task_table.get_target_resolution_text(1)

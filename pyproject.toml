@@ -9,3 +9,8 @@ dependencies = [
     "pytest-qt>=4.4.0",
     "nuitka>=2.0.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+

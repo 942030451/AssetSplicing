@@ -10,6 +10,10 @@ def test_tools_exist():
     assert ffprobe_path.exists(), f"Missing {ffprobe_path}"
 
     # 验证内置工具可直接执行
-    res = subprocess.run([str(ffmpeg_path), "-version"], capture_output=True, text=True)
-    assert res.returncode == 0
-    assert "ffmpeg version" in res.stdout
+    res_ffmpeg = subprocess.run([str(ffmpeg_path), "-version"], capture_output=True, text=True)
+    assert res_ffmpeg.returncode == 0
+    assert "ffmpeg version" in res_ffmpeg.stdout
+
+    res_probe = subprocess.run([str(ffprobe_path), "-version"], capture_output=True, text=True)
+    assert res_probe.returncode == 0
+    assert "ffprobe version" in res_probe.stdout

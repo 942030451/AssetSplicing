@@ -1,5 +1,7 @@
 import json
+import math
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
@@ -34,7 +36,7 @@ class MediaProbe:
             "-v",
             "error",
             "-show_entries",
-            "stream=width,height,duration,codec_type",
+            "stream=width,height,duration,codec_type:stream_disposition=attached_pic",
             "-show_entries",
             "format=duration",
             "-of",
@@ -42,8 +44,18 @@ class MediaProbe:
             str(p),
         ]
 
+        run_kwargs = {
+            "capture_output": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "check": True,
+            "timeout": 10.0,
+        }
+        if sys.platform == "win32":
+            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            res = subprocess.run(cmd, **run_kwargs)
             data = json.loads(res.stdout)
         except Exception:
             return None
@@ -54,7 +66,10 @@ class MediaProbe:
 
         for s in streams:
             codec_type = s.get("codec_type")
-            if codec_type == "video" and video_stream is None:
+            disposition = s.get("disposition") or {}
+            is_attached_pic = bool(disposition.get("attached_pic"))
+
+            if codec_type == "video" and not is_attached_pic and video_stream is None:
                 video_stream = s
             elif codec_type == "audio":
                 has_audio = True
@@ -78,7 +93,7 @@ class MediaProbe:
         except (ValueError, TypeError):
             duration = 0.0
 
-        if duration < 0:
+        if not math.isfinite(duration) or duration < 0:
             duration = 0.0
 
         ext = p.suffix.lower()

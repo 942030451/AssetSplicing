@@ -375,3 +375,45 @@ def test_ratio_switching_locks_completed_task(qtbot, tmp_path, sample_video_info
     # 任务 1 已完成，保持原比例规格锁定；任务 2 未完成，更新为新比例规格
     assert "960 × 2160" in window.task_table.get_target_resolution_text(0)
     assert "640 × 3240" in window.task_table.get_target_resolution_text(1)
+
+
+def test_start_processing_aborts_when_tools_missing(qtbot, tmp_path, sample_video_info):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    f1 = tmp_path / "task.mp4"
+    f1.write_text("v1")
+    window.task_table.add_task_item(f1, sample_video_info, split_ratio=2)
+
+    window.ffmpeg_bin = "non_existent_ffmpeg.exe"
+    window.ffprobe_bin = "non_existent_ffprobe.exe"
+
+    with patch("PySide6.QtWidgets.QMessageBox.warning"):
+        window.start_processing()
+
+    assert not window._is_processing
+    assert window.worker is None
+
+
+def test_start_processing_waits_for_previous_worker(qtbot, tmp_path, sample_video_info):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    f1 = tmp_path / "task.mp4"
+    f1.write_text("v1")
+    window.task_table.add_task_item(f1, sample_video_info, split_ratio=2)
+
+    old_worker = MagicMock()
+    old_worker.isRunning.return_value = True
+    window.worker = old_worker
+
+    with patch.object(window, "check_tools_exist", return_value=True), \
+         patch("app.ui.main_window.BatchProcessorThread") as MockThread:
+        new_worker = MagicMock()
+        MockThread.return_value = new_worker
+        window.start_processing()
+
+        old_worker.wait.assert_called_with(1000)
+        assert window._is_processing is True
+        assert window.worker is new_worker
+

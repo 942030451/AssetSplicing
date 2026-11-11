@@ -291,6 +291,9 @@ class MainWindow(QMainWindow):
             self.lbl_status.setText(f"就绪 (列表中共有 {self.task_table.rowCount()} 项)")
 
     def start_processing(self) -> None:
+        if not self.check_tools_exist(show_dialog=True):
+            return
+
         pending_tasks = self.task_table.get_pending_tasks(
             split_ratio=self.current_ratio,
             output_dir=self.custom_output_dir,
@@ -298,6 +301,9 @@ class MainWindow(QMainWindow):
         if not pending_tasks:
             QMessageBox.information(self, "提示", "所有任务已完成或列表中无待处理任务。")
             return
+
+        if self.worker and self.worker.isRunning():
+            self.worker.wait(1000)
 
         self._is_processing = True
         self.worker = BatchProcessorThread(ffmpeg_bin=self.ffmpeg_bin, tasks=pending_tasks)

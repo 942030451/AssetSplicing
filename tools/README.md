@@ -13,4 +13,4 @@
 
 1. `*.exe` 文件已被 `.gitignore` 忽略，避免大体积二进制文件提交至 Git 仓库。
 2. 开发与打包前，请确保将 `ffmpeg.exe` 和 `ffprobe.exe` 放置于本目录。
-3. Nuitka 打包时会通过 `--include-data-dir=tools=tools` 参数将本目录下的二进制工具直接嵌入至分发包中。
+3. 打包分发时，由 `build/build_nuitka.py` 自动化脚本重整便携发布包，并将本 `tools/` 目录完整复制至 `dist/AssetSplitter_Portable/tools`，确保免安装即开即用。

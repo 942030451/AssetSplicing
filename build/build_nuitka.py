@@ -90,11 +90,12 @@ def assemble_portable_package(
     if not src_dist.exists():
         raise FileNotFoundError(f"编译产物目录不存在: {src_dist}")
 
-    # 如果传入的是外层目录且自身不是 .dist 目录，自动搜寻内部的 .dist 目录
+    # 如果传入的是外层目录且自身不是 .dist 目录，自动搜寻内部最新的 .dist 目录
     if not src_dist.name.endswith(".dist") and not (src_dist / "AssetSplitter.exe").is_file():
-        candidates = list(src_dist.glob("*.dist"))
-        if candidates:
-            src_dist = candidates[0]
+        candidates = sorted(src_dist.glob("*.dist"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not candidates:
+            raise FileNotFoundError(f"在 {src_dist} 中未找到任何 Nuitka 产物目录 (*.dist)！")
+        src_dist = candidates[0]
 
     target_portable = Path(output_dir).resolve()
     target_portable.parent.mkdir(parents=True, exist_ok=True)
@@ -133,18 +134,17 @@ def run_compilation(
     dist_dir: Union[str, Path],
     output_filename: str = "AssetSplitter.exe",
 ) -> None:
-    """执行 Nuitka 独立编译。使用 List[str] 避免 shell 注入风险。"""
+    """执行 Nuitka 独立编译。使用 List[str] 避免 shell 注入风险，显式锁定工作目录 cwd。"""
+    project_root = Path(__file__).resolve().parent.parent
     cmd = build_command(entry_point, dist_dir, output_filename, assume_yes=True)
     print(f"[*] 执行编译命令: {' '.join(cmd)}")
 
-    # 传递现有环境变量，确保代理等配置正常工作
+    # 传递环境变量并设置项目根目录 PYTHONPATH，完全遵从系统现有环境变量
     env = os.environ.copy()
-    if "HTTP_PROXY" not in env and "http_proxy" not in env:
-        # 如果本地开启了常见代理端口，可自动兼容
-        env["HTTP_PROXY"] = "http://127.0.0.1:7897"
-        env["HTTPS_PROXY"] = "http://127.0.0.1:7897"
+    existing_pp = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = f"{project_root};{existing_pp}" if existing_pp else str(project_root)
 
-    result = subprocess.run(cmd, env=env, check=False)
+    result = subprocess.run(cmd, env=env, cwd=str(project_root), check=False)
     if result.returncode != 0:
         raise RuntimeError(f"Nuitka 编译失败，退出码: {result.returncode}")
 
@@ -179,9 +179,14 @@ def main() -> int:
     if not ffmpeg_exe.is_file() or not ffprobe_exe.is_file():
         raise FileNotFoundError("便携包内 tools/ 工具不完整！")
 
-    proc = subprocess.run([str(ffmpeg_exe), "-version"], capture_output=True, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(f"内置 ffmpeg.exe 运行验证失败: {proc.stderr.decode('utf-8', errors='ignore')}")
+    proc_ffmpeg = subprocess.run([str(ffmpeg_exe), "-version"], capture_output=True, check=False)
+    if proc_ffmpeg.returncode != 0:
+        raise RuntimeError(f"内置 ffmpeg.exe 运行验证失败: {proc_ffmpeg.stderr.decode('utf-8', errors='ignore')}")
+
+    proc_ffprobe = subprocess.run([str(ffprobe_exe), "-version"], capture_output=True, check=False)
+    if proc_ffprobe.returncode != 0:
+        raise RuntimeError(f"内置 ffprobe.exe 运行验证失败: {proc_ffprobe.stderr.decode('utf-8', errors='ignore')}")
+
     print("[+] 内置 ffmpeg.exe 与 ffprobe.exe 验证通过。")
 
     print(f"[SUCCESS] 绿色便携发布包构建成功: {portable_dir}")

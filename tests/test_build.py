@@ -99,3 +99,74 @@ def test_assemble_portable_package(tmp_path: Path):
     assert (portable_output / "tools" / "ffprobe.exe").is_file()
     assert (portable_output / "tools" / "README.md").is_file()
     assert verify_no_source_leak(portable_output) is True
+
+
+def test_assemble_portable_package_from_parent_dir(tmp_path: Path):
+    """验证从包含 *.dist 的外层目录自动查找并重整。"""
+    dist_root = tmp_path / "dist"
+    nuitka_out = dist_root / "main.dist"
+    nuitka_out.mkdir(parents=True)
+    (nuitka_out / "AssetSplitter.exe").write_bytes(b"EXE_BINARY")
+
+    tools_src = tmp_path / "tools"
+    tools_src.mkdir()
+    (tools_src / "ffmpeg.exe").write_bytes(b"FFMPEG_BINARY")
+    (tools_src / "ffprobe.exe").write_bytes(b"FFPROBE_BINARY")
+
+    portable_output = dist_root / "AssetSplitter_Portable"
+
+    result_path = assemble_portable_package(
+        dist_dir=dist_root,
+        tools_dir=tools_src,
+        output_dir=portable_output,
+    )
+
+    assert result_path == portable_output
+    assert (portable_output / "AssetSplitter.exe").is_file()
+    assert (portable_output / "tools" / "ffmpeg.exe").is_file()
+    assert (portable_output / "tools" / "ffprobe.exe").is_file()
+
+
+def test_assemble_portable_package_renames_main_exe(tmp_path: Path):
+    """验证当 Nuitka 产物为 main.exe 时自动重命名为 AssetSplitter.exe。"""
+    dist_root = tmp_path / "dist"
+    nuitka_out = dist_root / "main.dist"
+    nuitka_out.mkdir(parents=True)
+    (nuitka_out / "main.exe").write_bytes(b"MAIN_EXE_CONTENT")
+
+    tools_src = tmp_path / "tools"
+    tools_src.mkdir()
+    (tools_src / "ffmpeg.exe").write_bytes(b"FFMPEG_BINARY")
+    (tools_src / "ffprobe.exe").write_bytes(b"FFPROBE_BINARY")
+
+    portable_output = dist_root / "AssetSplitter_Portable"
+
+    assemble_portable_package(
+        dist_dir=nuitka_out,
+        tools_dir=tools_src,
+        output_dir=portable_output,
+    )
+
+    assert not (portable_output / "main.exe").exists()
+    assert (portable_output / "AssetSplitter.exe").is_file()
+    assert (portable_output / "AssetSplitter.exe").read_bytes() == b"MAIN_EXE_CONTENT"
+
+
+def test_assemble_portable_package_no_dist_raises(tmp_path: Path):
+    """验证外层目录无任何 *.dist 产物时显式抛出 FileNotFoundError。"""
+    dist_root = tmp_path / "empty_dist"
+    dist_root.mkdir()
+
+    tools_src = tmp_path / "tools"
+    tools_src.mkdir()
+    (tools_src / "ffmpeg.exe").write_bytes(b"FFMPEG_BINARY")
+    (tools_src / "ffprobe.exe").write_bytes(b"FFPROBE_BINARY")
+
+    portable_output = dist_root / "AssetSplitter_Portable"
+
+    with pytest.raises(FileNotFoundError, match="未找到任何 Nuitka 产物目录"):
+        assemble_portable_package(
+            dist_dir=dist_root,
+            tools_dir=tools_src,
+            output_dir=portable_output,
+        )

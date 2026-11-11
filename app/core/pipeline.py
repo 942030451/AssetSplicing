@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Union
 
 
 class PipelineBuilder:
@@ -7,8 +7,24 @@ class PipelineBuilder:
     def calculate_part_width(w: int, n: int) -> int:
         if n <= 0:
             raise ValueError("n must be greater than 0")
-        raw_part = w / n
-        return int(raw_part // 2 * 2)
+        if w <= 0:
+            raise ValueError("w must be greater than 0")
+        part = int((w / n) // 2 * 2)
+        if part < 2:
+            raise ValueError(f"Calculated part width ({part}) is too small (< 2)")
+        return part
+
+    @staticmethod
+    def generate_output_path(
+        input_path: Union[str, Path],
+        n: int,
+        output_dir: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        if n <= 0:
+            raise ValueError("n must be greater than 0")
+        p = Path(input_path)
+        target_dir = Path(output_dir) if output_dir else p.parent
+        return target_dir / f"{p.stem}_vsplit_1_{n}{p.suffix}"
 
     @staticmethod
     def build_filtergraph(w_part: int, h: int, n: int) -> str:
@@ -36,7 +52,10 @@ class PipelineBuilder:
         has_audio: bool = True,
     ) -> List[str]:
         w_part = cls.calculate_part_width(orig_w, n)
-        filtergraph = cls.build_filtergraph(w_part, orig_h, n)
+        effective_h = (orig_h // 2 * 2) if is_video else orig_h
+        if is_video and effective_h < 2:
+            raise ValueError(f"Calculated effective height ({effective_h}) is too small (< 2)")
+        filtergraph = cls.build_filtergraph(w_part, effective_h, n)
 
         cmd = [
             ffmpeg_bin,

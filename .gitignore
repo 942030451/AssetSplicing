@@ -16,7 +16,6 @@ ENV/
 htmlcov/
 
 # Build & Nuitka
-build/
 dist/
 *.build/
 *.dist/

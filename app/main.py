@@ -1,7 +1,13 @@
 """应用程序主入口点。"""
 
 import sys
+from pathlib import Path
 from typing import List, Optional
+
+# 确保在直接作为脚本启动时，项目根目录位于 sys.path 首位
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication

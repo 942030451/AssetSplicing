@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build & Nuitka
+build/
+dist/
+*.build/
+*.dist/
+*.onefile-build/
+
+# Binaries in tools
+tools/*.exe
+!tools/README.md
+
+# IDE
+.vscode/
+.idea/

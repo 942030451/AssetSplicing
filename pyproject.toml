@@ -1,0 +1,11 @@
+[project]
+name = "asset-splicing"
+version = "0.1.0"
+description = "Windows免安装素材垂直分割与上下拼接小工具"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.7.0",
+    "pytest>=8.0.0",
+    "pytest-qt>=4.4.0",
+    "nuitka>=2.0.0",
+]

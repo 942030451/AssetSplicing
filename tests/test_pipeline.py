@@ -1,0 +1,99 @@
+import pytest
+from pathlib import Path
+from app.core.pipeline import PipelineBuilder
+
+def test_calculate_part_width():
+    # 1920 均分 2 份 -> 960 (偶数)
+    assert PipelineBuilder.calculate_part_width(1920, 2) == 960
+    # 1920 均分 3 份 -> 640 (偶数)
+    assert PipelineBuilder.calculate_part_width(1920, 3) == 640
+    # 1920 均分 4 份 -> 480 (偶数)
+    assert PipelineBuilder.calculate_part_width(1920, 4) == 480
+    # 奇数分辨率容错测试：1921 均分 2 份 -> 向下取偶得 960
+    assert PipelineBuilder.calculate_part_width(1921, 2) == 960
+    # 1083 均分 3 份 -> 1083/3 = 361 -> 向下取偶得 360
+    assert PipelineBuilder.calculate_part_width(1083, 3) == 360
+
+def test_calculate_part_width_invalid_n():
+    with pytest.raises(ValueError, match="n must be greater than 0"):
+        PipelineBuilder.calculate_part_width(1920, 0)
+    with pytest.raises(ValueError, match="n must be greater than 0"):
+        PipelineBuilder.calculate_part_width(1920, -1)
+
+def test_build_filtergraph_two_parts():
+    fg = PipelineBuilder.build_filtergraph(w_part=960, h=1080, n=2)
+    assert "[0:v]crop=960:1080:0:0[p0]" in fg
+    assert "[0:v]crop=960:1080:960:0[p1]" in fg
+    assert "[p0][p1]vstack=inputs=2[v]" in fg
+
+def test_build_filtergraph_three_parts():
+    fg = PipelineBuilder.build_filtergraph(w_part=640, h=1080, n=3)
+    assert "[0:v]crop=640:1080:0:0[p0]" in fg
+    assert "[0:v]crop=640:1080:640:0[p1]" in fg
+    assert "[0:v]crop=640:1080:1280:0[p2]" in fg
+    assert "[p0][p1][p2]vstack=inputs=3[v]" in fg
+
+def test_build_filtergraph_four_parts():
+    fg = PipelineBuilder.build_filtergraph(w_part=480, h=1080, n=4)
+    assert "[0:v]crop=480:1080:0:0[p0]" in fg
+    assert "[0:v]crop=480:1080:480:0[p1]" in fg
+    assert "[0:v]crop=480:1080:960:0[p2]" in fg
+    assert "[0:v]crop=480:1080:1440:0[p3]" in fg
+    assert "[p0][p1][p2][p3]vstack=inputs=4[v]" in fg
+
+def test_build_command_for_video(tmp_path):
+    input_file = tmp_path / "test.mp4"
+    output_file = tmp_path / "out.mp4"
+    cmd = PipelineBuilder.build_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        output_path=str(output_file),
+        orig_w=1920,
+        orig_h=1080,
+        n=2,
+        is_video=True,
+        has_audio=True
+    )
+    assert "ffmpeg.exe" in cmd[0]
+    assert "-filter_complex" in cmd
+    assert "-c:a" in cmd
+    assert "copy" in cmd
+    assert "-c:v" in cmd
+    assert "libx264" in cmd
+    assert "-progress" in cmd
+    assert "pipe:1" in cmd
+
+def test_build_command_for_video_no_audio(tmp_path):
+    input_file = tmp_path / "test.mp4"
+    output_file = tmp_path / "out.mp4"
+    cmd = PipelineBuilder.build_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        output_path=str(output_file),
+        orig_w=1920,
+        orig_h=1080,
+        n=2,
+        is_video=True,
+        has_audio=False
+    )
+    assert "ffmpeg.exe" in cmd[0]
+    assert "-filter_complex" in cmd
+    assert "-c:a" not in cmd
+    assert "-c:v" in cmd
+    assert "libx264" in cmd
+
+def test_build_command_for_image(tmp_path):
+    input_file = tmp_path / "test.png"
+    output_file = tmp_path / "out.png"
+    cmd = PipelineBuilder.build_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        output_path=str(output_file),
+        orig_w=1200,
+        orig_h=800,
+        n=2,
+        is_video=False,
+        has_audio=False
+    )
+    assert "-c:a" not in cmd
+    assert "-progress" not in cmd

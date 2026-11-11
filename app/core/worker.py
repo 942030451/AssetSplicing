@@ -52,16 +52,22 @@ class BatchProcessorThread(QThread):
     def __init__(
         self,
         ffmpeg_bin: Union[str, Path, Sequence[BatchTask]] = "ffmpeg",
-        tasks: Optional[Sequence[BatchTask]] = None,
+        tasks: Optional[Union[Sequence[BatchTask], str, Path]] = None,
         parent: Optional[QObject] = None,
     ):
-        super().__init__(parent)
+        # 安全兼容 (tasks, ffmpeg_bin) 的调用形式与标准 (ffmpeg_bin, tasks) 形式
         if isinstance(ffmpeg_bin, (list, tuple)):
-            self.tasks: List[BatchTask] = list(ffmpeg_bin)
-            self.ffmpeg_bin: str = str(tasks) if tasks else "ffmpeg"
+            actual_tasks = list(ffmpeg_bin)
+            actual_ffmpeg_bin = str(tasks) if isinstance(tasks, (str, Path)) else "ffmpeg"
+            actual_parent = parent
         else:
-            self.ffmpeg_bin = str(ffmpeg_bin)
-            self.tasks = list(tasks) if tasks else []
+            actual_ffmpeg_bin = str(ffmpeg_bin)
+            actual_tasks = list(tasks) if isinstance(tasks, (list, tuple)) else []
+            actual_parent = parent
+
+        super().__init__(actual_parent)
+        self.ffmpeg_bin: str = actual_ffmpeg_bin
+        self.tasks: List[BatchTask] = actual_tasks
 
         self._is_cancelled: bool = False
         self._current_process: Optional[subprocess.Popen] = None
@@ -78,8 +84,9 @@ class BatchProcessorThread(QThread):
                     try:
                         proc.wait(timeout=2.0)
                     except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait(timeout=2.0)
+                        if proc.poll() is None:
+                            proc.kill()
+                            proc.wait(timeout=2.0)
                 except Exception:
                     pass
             self._cleanup_output_file()
@@ -109,8 +116,8 @@ class BatchProcessorThread(QThread):
 
                 with self._lock:
                     if self._is_cancelled:
+                        self.sig_task_failed.emit(task.task_id, "用户已取消任务")
                         break
-                    self._current_output_file = task.output_path
 
                 try:
                     task.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,16 +140,23 @@ class BatchProcessorThread(QThread):
                     self.sig_task_failed.emit(task.task_id, f"构建命令失败: {e}")
                     continue
 
+                with self._lock:
+                    if self._is_cancelled:
+                        self.sig_task_failed.emit(task.task_id, "用户已取消任务")
+                        break
+                    self._current_output_file = task.output_path
+
                 stderr_lines: deque = deque(maxlen=50)
 
-                def collect_stderr(proc: subprocess.Popen):
+                def collect_stderr(p: subprocess.Popen):
                     try:
-                        if proc.stderr:
-                            for err_line in proc.stderr:
+                        if p.stderr:
+                            for err_line in p.stderr:
                                 stderr_lines.append(err_line)
                     except Exception:
                         pass
 
+                proc: Optional[subprocess.Popen] = None
                 try:
                     proc = subprocess.Popen(
                         cmd,
@@ -183,12 +197,14 @@ class BatchProcessorThread(QThread):
 
                     if self._is_cancelled:
                         try:
-                            proc.terminate()
-                            proc.wait(timeout=2.0)
+                            if proc.poll() is None:
+                                proc.terminate()
+                                proc.wait(timeout=2.0)
                         except Exception:
                             try:
-                                proc.kill()
-                                proc.wait(timeout=2.0)
+                                if proc.poll() is None:
+                                    proc.kill()
+                                    proc.wait(timeout=2.0)
                             except Exception:
                                 pass
                     else:
@@ -219,6 +235,17 @@ class BatchProcessorThread(QThread):
                     self._cleanup_output_file()
                     self.sig_task_failed.emit(task.task_id, str(e))
                 finally:
+                    if proc:
+                        if proc.stdout:
+                            try:
+                                proc.stdout.close()
+                            except Exception:
+                                pass
+                        if proc.stderr:
+                            try:
+                                proc.stderr.close()
+                            except Exception:
+                                pass
                     with self._lock:
                         self._current_process = None
                         self._current_output_file = None

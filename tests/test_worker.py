@@ -320,3 +320,41 @@ def test_worker_invalid_split_ratio_continues_next_task(tmp_path, qtbot):
     assert completed_events[0][0] == "t_ok"
     assert img2_out.exists()
 
+
+def test_worker_cancel_on_task_started_emits_failed(tmp_path, qtbot):
+    # 状态机契约测试：任务刚刚 started 即被 cancel，必须收到 sig_task_failed 信号，避免 UI 任务卡死在运行中
+    img_in = tmp_path / "in_quick.png"
+    img_out = tmp_path / "out_quick.png"
+    subprocess.run(
+        [FFMPEG_BIN, "-y", "-f", "lavfi", "-i", "color=c=black:s=100x100:d=1", "-frames:v", "1", str(img_in)],
+        check=True,
+        capture_output=True,
+    )
+    info = MediaInfo(width=100, height=100, duration=0.0, is_video=False, has_audio=False)
+    task = BatchTask(task_id="quick_cancel", input_path=img_in, output_path=img_out, media_info=info, split_ratio=2)
+
+    failed_messages = []
+    worker = BatchProcessorThread(FFMPEG_BIN, [task])
+    worker.sig_task_started.connect(lambda tid: worker.cancel())
+    worker.sig_task_failed.connect(lambda tid, msg: failed_messages.append((tid, msg)))
+
+    with qtbot.waitSignal(worker.sig_all_finished, timeout=5000):
+        worker.start()
+
+    assert len(failed_messages) == 1
+    assert failed_messages[0][0] == "quick_cancel"
+    assert "取消" in failed_messages[0][1]
+
+
+def test_worker_parent_parameter(qtbot):
+    from PySide6.QtCore import QObject
+
+    parent_obj = QObject()
+    worker = BatchProcessorThread(ffmpeg_bin=FFMPEG_BIN, tasks=[], parent=parent_obj)
+    assert worker.parent() == parent_obj
+
+    # 兼容格式 (tasks, ffmpeg_bin, parent)
+    worker2 = BatchProcessorThread([], FFMPEG_BIN, parent_obj)
+    assert worker2.parent() == parent_obj
+
+

@@ -179,6 +179,45 @@ class MainWindow(QMainWindow):
         custom_input_layout.addWidget(self.btn_browse_dir)
         config_layout.addLayout(custom_input_layout)
 
+        # 2.4 视频码率模式配置
+        bitrate_layout = QHBoxLayout()
+        bitrate_layout.setSpacing(14)
+        bitrate_label = QLabel("视频码率：", config_group)
+        bitrate_label.setStyleSheet("font-weight: 600; color: #94a3b8; background: transparent;")
+        bitrate_layout.addWidget(bitrate_label)
+
+        self.radio_bitrate_original = QRadioButton("保持原片码率", config_group)
+        self.radio_bitrate_custom = QRadioButton("自定义码率：", config_group)
+        self.radio_bitrate_crf = QRadioButton("智能画质 (CRF 18)", config_group)
+
+        self.radio_bitrate_original.setStyleSheet("background: transparent;")
+        self.radio_bitrate_custom.setStyleSheet("background: transparent;")
+        self.radio_bitrate_crf.setStyleSheet("background: transparent;")
+        self.radio_bitrate_original.setChecked(True)
+
+        self.bitrate_group = QButtonGroup(self)
+        self.bitrate_group.addButton(self.radio_bitrate_original)
+        self.bitrate_group.addButton(self.radio_bitrate_custom)
+        self.bitrate_group.addButton(self.radio_bitrate_crf)
+
+        self.edit_custom_bitrate = QLineEdit(config_group)
+        self.edit_custom_bitrate.setPlaceholderText("10")
+        self.edit_custom_bitrate.setFixedWidth(65)
+        self.edit_custom_bitrate.setEnabled(False)
+
+        lbl_unit = QLabel("Mbps", config_group)
+        lbl_unit.setStyleSheet("color: #94a3b8; background: transparent;")
+
+        self.radio_bitrate_custom.toggled.connect(self.on_bitrate_mode_changed)
+
+        bitrate_layout.addWidget(self.radio_bitrate_original)
+        bitrate_layout.addWidget(self.radio_bitrate_custom)
+        bitrate_layout.addWidget(self.edit_custom_bitrate)
+        bitrate_layout.addWidget(lbl_unit)
+        bitrate_layout.addWidget(self.radio_bitrate_crf)
+        bitrate_layout.addStretch()
+        config_layout.addLayout(bitrate_layout)
+
         main_layout.addWidget(config_group)
 
         # 3. 任务表格
@@ -240,6 +279,29 @@ class MainWindow(QMainWindow):
                 return Path(val)
         return None
 
+    @property
+    def current_bitrate_mode(self) -> str:
+        if self.radio_bitrate_custom.isChecked():
+            return "custom"
+        if self.radio_bitrate_crf.isChecked():
+            return "crf"
+        return "original"
+
+    @property
+    def custom_bitrate_val(self) -> Optional[str]:
+        if self.radio_bitrate_custom.isChecked():
+            txt = self.edit_custom_bitrate.text().strip()
+            if not txt:
+                txt = "10"
+            try:
+                val = float(txt)
+                if val <= 0:
+                    val = 10.0
+                return f"{round(val * 1000)}k"
+            except ValueError:
+                return "10000k"
+        return None
+
     def check_tools_exist(self, show_dialog: bool = True) -> bool:
         """检查核心编解码工具是否存在。"""
         ffmpeg_exists = Path(self.ffmpeg_bin).is_file()
@@ -271,6 +333,10 @@ class MainWindow(QMainWindow):
         selected_dir = QFileDialog.getExistingDirectory(self, "选择自定义输出目录", str(Path.home()))
         if selected_dir:
             self.edit_custom_dir.setText(selected_dir)
+
+    def on_bitrate_mode_changed(self, checked: bool) -> None:
+        is_custom = self.radio_bitrate_custom.isChecked()
+        self.edit_custom_bitrate.setEnabled(is_custom)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """窗口关闭时安全拦截并中止正在运行的转码任务。"""
@@ -354,6 +420,11 @@ class MainWindow(QMainWindow):
         self.edit_custom_dir.setEnabled(not is_processing and self.radio_out_custom.isChecked())
         self.btn_browse_dir.setEnabled(not is_processing and self.radio_out_custom.isChecked())
 
+        self.radio_bitrate_original.setEnabled(not is_processing)
+        self.radio_bitrate_custom.setEnabled(not is_processing)
+        self.radio_bitrate_crf.setEnabled(not is_processing)
+        self.edit_custom_bitrate.setEnabled(not is_processing and self.radio_bitrate_custom.isChecked())
+
         if is_processing:
             self.lbl_status.setText("正在批量处理任务...")
         else:
@@ -366,6 +437,8 @@ class MainWindow(QMainWindow):
         pending_tasks = self.task_table.get_pending_tasks(
             split_ratio=self.current_ratio,
             output_dir=self.custom_output_dir,
+            bitrate_mode=self.current_bitrate_mode,
+            custom_bitrate=self.custom_bitrate_val,
         )
         if not pending_tasks:
             QMessageBox.information(self, "提示", "所有任务已完成或列表中无待处理任务。")

@@ -285,6 +285,60 @@ def test_custom_output_dir_selection(qtbot, tmp_path, sample_video_info):
     assert tasks_custom[0].output_path.parent == custom_dir
 
 
+def test_bitrate_mode_selection(qtbot, tmp_path):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    vid_info = MediaInfo(
+        width=1920,
+        height=1080,
+        duration=10.0,
+        is_video=True,
+        has_audio=True,
+        bitrate=11_000_000,
+    )
+    f1 = tmp_path / "task.mp4"
+    f1.write_text("video")
+    window.task_table.add_task_item(f1, vid_info, split_ratio=2)
+
+    # 1. 默认保持原片码率 (11 Mbps -> 11000k)
+    assert window.radio_bitrate_original.isChecked()
+    assert window.current_bitrate_mode == "original"
+    tasks_orig = window.task_table.get_pending_tasks(
+        split_ratio=window.current_ratio,
+        output_dir=window.custom_output_dir,
+        bitrate_mode=window.current_bitrate_mode,
+        custom_bitrate=window.custom_bitrate_val,
+    )
+    assert tasks_orig[0].bitrate == "11000k"
+
+    # 2. 切换为自定义码率 15 Mbps -> 15000k
+    window.radio_bitrate_custom.setChecked(True)
+    assert window.edit_custom_bitrate.isEnabled()
+    window.edit_custom_bitrate.setText("15")
+    assert window.current_bitrate_mode == "custom"
+    assert window.custom_bitrate_val == "15000k"
+    tasks_custom = window.task_table.get_pending_tasks(
+        split_ratio=window.current_ratio,
+        output_dir=window.custom_output_dir,
+        bitrate_mode=window.current_bitrate_mode,
+        custom_bitrate=window.custom_bitrate_val,
+    )
+    assert tasks_custom[0].bitrate == "15000k"
+
+    # 3. 切换为智能画质 (CRF 18) -> None
+    window.radio_bitrate_crf.setChecked(True)
+    assert not window.edit_custom_bitrate.isEnabled()
+    assert window.current_bitrate_mode == "crf"
+    tasks_crf = window.task_table.get_pending_tasks(
+        split_ratio=window.current_ratio,
+        output_dir=window.custom_output_dir,
+        bitrate_mode=window.current_bitrate_mode,
+        custom_bitrate=window.custom_bitrate_val,
+    )
+    assert tasks_crf[0].bitrate is None
+
+
 def test_task_table_status_updates(qtbot, tmp_path, sample_video_info):
     table = TaskTable()
     qtbot.addWidget(table)

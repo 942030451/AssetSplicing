@@ -114,6 +114,25 @@ def test_build_command_odd_height_video(tmp_path):
     assert "crop=640:1080:640:0" in fg
     assert "crop=640:1080:1280:0" in fg
 
+def test_build_command_with_bitrate(tmp_path):
+    input_file = tmp_path / "test.mp4"
+    output_file = tmp_path / "out.mp4"
+    cmd = PipelineBuilder.build_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        output_path=str(output_file),
+        orig_w=1920,
+        orig_h=1080,
+        n=2,
+        is_video=True,
+        has_audio=True,
+        bitrate="12M"
+    )
+    assert "-b:v" in cmd
+    b_idx = cmd.index("-b:v")
+    assert cmd[b_idx + 1] == "12M"
+    assert "-crf" not in cmd
+
 def test_build_command_for_image(tmp_path):
     input_file = tmp_path / "test.png"
     output_file = tmp_path / "out.png"

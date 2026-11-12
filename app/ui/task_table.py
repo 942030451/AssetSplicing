@@ -101,10 +101,15 @@ class TaskTable(QTableWidget):
         item_type.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setItem(row, self.COL_TYPE, item_type)
 
-        # 原分辨率
-        orig_res_str = f"{media_info.width} × {media_info.height}"
+        # 原分辨率与原码率
+        if media_info.is_video and media_info.bitrate:
+            orig_res_str = f"{media_info.width} × {media_info.height} ({media_info.bitrate_str})"
+        else:
+            orig_res_str = f"{media_info.width} × {media_info.height}"
         item_orig = QTableWidgetItem(orig_res_str)
         item_orig.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        if media_info.is_video:
+            item_orig.setToolTip(f"原分辨率: {media_info.width} × {media_info.height}\n原始码率: {media_info.bitrate_str}")
         self.setItem(row, self.COL_ORIG_RES, item_orig)
 
         # 拼接后规格
@@ -328,6 +333,8 @@ class TaskTable(QTableWidget):
         self,
         split_ratio: int,
         output_dir: Optional[Path] = None,
+        bitrate_mode: str = "original",
+        custom_bitrate: Optional[str] = None,
     ) -> List[BatchTask]:
         """获取所有待处理的任务列表（等待中、失败或处理中的任务）。"""
         tasks: List[BatchTask] = []
@@ -343,13 +350,27 @@ class TaskTable(QTableWidget):
                     split_ratio,
                     output_dir=output_dir,
                 )
+                media_info = item_data["info"]
+                task_bitrate: Optional[str] = None
+                if media_info.is_video:
+                    if bitrate_mode == "original":
+                        if media_info.bitrate and media_info.bitrate > 0:
+                            task_bitrate = f"{round(media_info.bitrate / 1000)}k"
+                        else:
+                            task_bitrate = None
+                    elif bitrate_mode == "custom":
+                        task_bitrate = custom_bitrate
+                    elif bitrate_mode == "crf":
+                        task_bitrate = None
+
                 tasks.append(
                     BatchTask(
                         task_id=task_id,
                         input_path=in_path,
                         output_path=out_path,
-                        media_info=item_data["info"],
+                        media_info=media_info,
                         split_ratio=split_ratio,
+                        bitrate=task_bitrate,
                     )
                 )
         return tasks

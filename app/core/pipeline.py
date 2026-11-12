@@ -50,6 +50,7 @@ class PipelineBuilder:
         n: int,
         is_video: bool = True,
         has_audio: bool = True,
+        bitrate: Optional[str] = None,
     ) -> List[str]:
         w_part = cls.calculate_part_width(orig_w, n)
         effective_h = (orig_h // 2 * 2) if is_video else orig_h
@@ -71,12 +72,13 @@ class PipelineBuilder:
         if is_video:
             if has_audio:
                 cmd.extend(["-c:a", "copy", "-map", "0:a?"])
+            cmd.extend(["-c:v", "libx264"])
+            if bitrate:
+                cmd.extend(["-b:v", bitrate])
+            else:
+                cmd.extend(["-crf", "18"])
             cmd.extend(
                 [
-                    "-c:v",
-                    "libx264",
-                    "-crf",
-                    "18",
                     "-preset",
                     "fast",
                     "-pix_fmt",

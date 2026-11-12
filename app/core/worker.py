@@ -34,6 +34,7 @@ class BatchTask:
     output_path: Path
     media_info: MediaInfo
     split_ratio: int
+    bitrate: Optional[str] = None
 
     def __post_init__(self):
         if not isinstance(self.input_path, Path):
@@ -135,6 +136,7 @@ class BatchProcessorThread(QThread):
                         n=task.split_ratio,
                         is_video=task.media_info.is_video,
                         has_audio=task.media_info.has_audio,
+                        bitrate=task.bitrate,
                     )
                 except Exception as e:
                     self.sig_task_failed.emit(task.task_id, f"构建命令失败: {e}")

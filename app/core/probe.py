@@ -17,6 +17,23 @@ class MediaInfo:
     duration: float
     is_video: bool
     has_audio: bool
+    bitrate: Optional[int] = None  # 视频码率，单位 bps (例如 11000000 即 11 Mbps)
+
+    @property
+    def bitrate_mbps(self) -> Optional[float]:
+        if self.bitrate and self.bitrate > 0:
+            return round(self.bitrate / 1_000_000, 2)
+        return None
+
+    @property
+    def bitrate_str(self) -> str:
+        if self.bitrate and self.bitrate > 0:
+            mbps = self.bitrate / 1_000_000
+            if mbps >= 1.0:
+                return f"{mbps:.1f} Mbps"
+            else:
+                return f"{round(self.bitrate / 1000)} kbps"
+        return "未知"
 
 
 class MediaProbe:
@@ -36,9 +53,9 @@ class MediaProbe:
             "-v",
             "error",
             "-show_entries",
-            "stream=width,height,duration,codec_type:stream_disposition=attached_pic",
+            "stream=width,height,duration,codec_type,bit_rate:stream_disposition=attached_pic",
             "-show_entries",
-            "format=duration",
+            "format=duration,bit_rate,size",
             "-of",
             "json",
             str(p),
@@ -104,10 +121,47 @@ class MediaProbe:
         else:
             is_video = duration > 0.0
 
+        # 视频码率探测 (bps)
+        bitrate: Optional[int] = None
+        if is_video:
+            # 1. 优先从视频流属性提取
+            raw_br = video_stream.get("bit_rate")
+            if raw_br:
+                try:
+                    b = int(raw_br)
+                    if b > 0:
+                        bitrate = b
+                except (ValueError, TypeError):
+                    pass
+
+            # 2. 从封装容器 format 读取并适当扣除音频开销
+            if bitrate is None:
+                raw_fmt_br = format_info.get("bit_rate")
+                if raw_fmt_br:
+                    try:
+                        b = int(raw_fmt_br)
+                        if b > 0:
+                            audio_est = 128_000 if has_audio else 0
+                            bitrate = max(100_000, b - audio_est)
+                    except (ValueError, TypeError):
+                        pass
+
+            # 3. 兜底根据文件物理大小和时长估算
+            if bitrate is None and duration > 0.1:
+                try:
+                    file_size = p.stat().st_size
+                    b = int((file_size * 8) / duration)
+                    if b > 0:
+                        audio_est = 128_000 if has_audio else 0
+                        bitrate = max(100_000, b - audio_est)
+                except Exception:
+                    pass
+
         return MediaInfo(
             width=width,
             height=height,
             duration=duration,
             is_video=is_video,
             has_audio=has_audio,
+            bitrate=bitrate,
         )

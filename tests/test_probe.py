@@ -101,6 +101,9 @@ def test_probe_real_video(tmp_path):
     assert info.is_video is True
     assert info.has_audio is True
     assert info.duration >= 1.9
+    assert info.bitrate is not None and info.bitrate > 0
+    assert info.bitrate_mbps is not None
+    assert info.bitrate_str != "未知"
 
 
 def test_probe_video_without_audio(tmp_path):

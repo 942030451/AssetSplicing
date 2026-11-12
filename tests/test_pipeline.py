@@ -165,3 +165,41 @@ def test_generate_output_path():
     # 非法分块比例异常
     with pytest.raises(ValueError, match="n must be greater than 0"):
         PipelineBuilder.generate_output_path("video.mp4", 0)
+
+def test_build_preview_command_video(tmp_path):
+    input_file = tmp_path / "test.mp4"
+    preview_file = tmp_path / "preview.jpg"
+    cmd = PipelineBuilder.build_preview_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        preview_output_path=str(preview_file),
+        orig_w=1920,
+        orig_h=1080,
+        n=2,
+        is_video=True,
+        seek_sec=1.5
+    )
+    assert "-ss" in cmd
+    assert "1.50" in cmd
+    assert "-frames:v" in cmd
+    assert "1" in cmd
+    assert "-filter_complex" in cmd
+    assert cmd[-1] == str(preview_file)
+
+def test_build_preview_command_image(tmp_path):
+    input_file = tmp_path / "test.png"
+    preview_file = tmp_path / "preview.png"
+    cmd = PipelineBuilder.build_preview_command(
+        ffmpeg_bin="ffmpeg.exe",
+        input_path=str(input_file),
+        preview_output_path=str(preview_file),
+        orig_w=1200,
+        orig_h=800,
+        n=3,
+        is_video=False
+    )
+    assert "-ss" not in cmd
+    assert "-frames:v" in cmd
+    assert "1" in cmd
+    assert "crop=400:800" in cmd[cmd.index("-filter_complex") + 1]
+

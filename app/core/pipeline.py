@@ -91,3 +91,38 @@ class PipelineBuilder:
 
         cmd.append(output_path)
         return cmd
+
+    @classmethod
+    def build_preview_command(
+        cls,
+        ffmpeg_bin: str,
+        input_path: str,
+        preview_output_path: str,
+        orig_w: int,
+        orig_h: int,
+        n: int,
+        is_video: bool = True,
+        seek_sec: float = 1.0,
+    ) -> List[str]:
+        """构建生成单帧/单图分割拼接预览图的 FFmpeg 命令行。"""
+        w_part = cls.calculate_part_width(orig_w, n)
+        effective_h = (orig_h // 2 * 2) if is_video else orig_h
+        if is_video and effective_h < 2:
+            raise ValueError(f"Calculated effective height ({effective_h}) is too small (< 2)")
+        filtergraph = cls.build_filtergraph(w_part, effective_h, n)
+
+        cmd = [ffmpeg_bin, "-y"]
+        if is_video:
+            cmd.extend(["-ss", f"{max(0.0, seek_sec):.2f}"])
+        cmd.extend([
+            "-i",
+            input_path,
+            "-frames:v",
+            "1",
+            "-filter_complex",
+            filtergraph,
+            "-map",
+            "[v]",
+            preview_output_path,
+        ])
+        return cmd

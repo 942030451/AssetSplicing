@@ -7,7 +7,7 @@ import sys
 from typing import List, Optional
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QCloseEvent, QDesktopServices
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 from app.core.probe import MediaProbe
 from app.core.worker import BatchProcessorThread
 from app.ui.drop_zone import DropZone
+from app.ui.preview_dialog import PreviewDialog
 from app.ui.task_table import TaskTable
 
 
@@ -49,14 +50,32 @@ def resolve_tool_path(tool_name: str) -> str:
     return str(candidates[0])
 
 
+def resolve_app_icon() -> Optional[QIcon]:
+    """定位应用程序窗口图标。"""
+    candidates = [
+        Path(__file__).resolve().parent.parent / "resources" / "icon.png",
+        Path(__file__).resolve().parent.parent / "resources" / "icon.ico",
+        Path(sys.executable).parent / "app" / "resources" / "icon.png",
+        Path.cwd() / "app" / "resources" / "icon.png",
+    ]
+    for c in candidates:
+        if c.is_file():
+            return QIcon(str(c))
+    return None
+
+
 class MainWindow(QMainWindow):
     """素材分割与上下拼接工具主界面。"""
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setWindowTitle("素材垂直分割与上下拼接小工具 (Asset Splicer)")
+        self.setWindowTitle("Asset Splicer-分割拼接工具")
         self.resize(1000, 720)
         self.setMinimumSize(850, 580)
+
+        icon = resolve_app_icon()
+        if icon:
+            self.setWindowIcon(icon)
 
         # 核心工具路径与探测器
         self.ffmpeg_bin = resolve_tool_path("ffmpeg")
@@ -74,7 +93,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setContentsMargins(18, 16, 18, 16)
         main_layout.setSpacing(14)
 
         # 1. 拖拽放置区
@@ -86,17 +105,19 @@ class MainWindow(QMainWindow):
         # 2. 分割与导出配置区
         config_group = QGroupBox("分割与导出配置", self)
         config_layout = QVBoxLayout(config_group)
+        config_layout.setContentsMargins(16, 16, 16, 14)
         config_layout.setSpacing(10)
 
-        # 2.1 比例选择
+        # 2.1 比例选择（选项精简为 1/2, 1/3, 1/4）
         ratio_layout = QHBoxLayout()
-        ratio_label = QLabel("分切比例：", config_group)
-        ratio_label.setStyleSheet("font-weight: 600;")
+        ratio_layout.setSpacing(16)
+        ratio_label = QLabel("分割比例：", config_group)
+        ratio_label.setStyleSheet("font-weight: 600; color: #94a3b8;")
         ratio_layout.addWidget(ratio_label)
 
-        self.radio_ratio_2 = QRadioButton("1/2 (切为 2 截上下拼接)", config_group)
-        self.radio_ratio_3 = QRadioButton("1/3 (切为 3 截上下拼接)", config_group)
-        self.radio_ratio_4 = QRadioButton("1/4 (切为 4 截上下拼接)", config_group)
+        self.radio_ratio_2 = QRadioButton("1/2", config_group)
+        self.radio_ratio_3 = QRadioButton("1/3", config_group)
+        self.radio_ratio_4 = QRadioButton("1/4", config_group)
         self.radio_ratio_2.setChecked(True)
 
         self.ratio_group = QButtonGroup(self)
@@ -114,19 +135,30 @@ class MainWindow(QMainWindow):
         ratio_layout.addStretch()
         config_layout.addLayout(ratio_layout)
 
-        # 2.2 导出目录选择
+        # 2.2 导出目录模式选择
         out_layout = QHBoxLayout()
+        out_layout.setSpacing(16)
         out_label = QLabel("导出路径：", config_group)
-        out_label.setStyleSheet("font-weight: 600;")
+        out_label.setStyleSheet("font-weight: 600; color: #94a3b8;")
         out_layout.addWidget(out_label)
 
         self.radio_out_source = QRadioButton("与原文件同目录", config_group)
-        self.radio_out_custom = QRadioButton("自定义目录：", config_group)
+        self.radio_out_custom = QRadioButton("自定义目录", config_group)
         self.radio_out_source.setChecked(True)
 
         self.out_group = QButtonGroup(self)
         self.out_group.addButton(self.radio_out_source)
         self.out_group.addButton(self.radio_out_custom)
+
+        out_layout.addWidget(self.radio_out_source)
+        out_layout.addWidget(self.radio_out_custom)
+        out_layout.addStretch()
+        config_layout.addLayout(out_layout)
+
+        # 2.3 自定义路径输入与浏览按钮（独占一行排布，彻底消除遮挡与紧绷感）
+        custom_input_layout = QHBoxLayout()
+        custom_input_layout.setContentsMargins(0, 0, 0, 0)
+        custom_input_layout.setSpacing(10)
 
         self.edit_custom_dir = QLineEdit(config_group)
         self.edit_custom_dir.setPlaceholderText("请选择自定义输出目录...")
@@ -138,25 +170,25 @@ class MainWindow(QMainWindow):
 
         self.radio_out_custom.toggled.connect(self.on_output_mode_changed)
 
-        out_layout.addWidget(self.radio_out_source)
-        out_layout.addWidget(self.radio_out_custom)
-        out_layout.addWidget(self.edit_custom_dir, 1)
-        out_layout.addWidget(self.btn_browse_dir)
-        config_layout.addLayout(out_layout)
+        custom_input_layout.addWidget(self.edit_custom_dir, 1)
+        custom_input_layout.addWidget(self.btn_browse_dir)
+        config_layout.addLayout(custom_input_layout)
 
         main_layout.addWidget(config_group)
 
         # 3. 任务表格
         self.task_table = TaskTable(self)
         self.task_table.sig_tasks_changed.connect(self.update_ui_state)
+        self.task_table.sig_preview_requested.connect(self.on_preview_task)
         main_layout.addWidget(self.task_table, 1)
 
         # 4. 底部控制栏
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(10)
 
-        self.lbl_status = QLabel("就绪", self)
-        self.lbl_status.setObjectName("mutedLabel")
+        self.lbl_status = QLabel("就绪 (列表中共有 0 项)", self)
+        self.lbl_status.setObjectName("statusLabel")
+        self.lbl_status.setStyleSheet("color: #94a3b8; font-weight: 500;")
 
         self.btn_clear = QPushButton("清空列表", self)
         self.btn_clear.clicked.connect(self.clear_tasks)
@@ -183,7 +215,8 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(bottom_layout)
 
-        # 状态栏
+        # 隐藏默认状态栏以消除双重重叠显示，同时保留其接口供通知与测试使用
+        self.statusBar().hide()
         self.statusBar().showMessage("准备就绪")
 
     @property
@@ -244,6 +277,23 @@ class MainWindow(QMainWindow):
                 pass
         event.accept()
 
+    def on_preview_task(self, task_id: str) -> None:
+        """响应表格中某任务的预览请求，生成并展示分割上下拼接效果。"""
+        if not self.check_tools_exist(show_dialog=True):
+            return
+
+        item = self.task_table.get_task_item(task_id)
+        if not item:
+            return
+
+        PreviewDialog.generate_and_show(
+            parent=self,
+            ffmpeg_bin=self.ffmpeg_bin,
+            file_path=item["path"],
+            media_info=item["info"],
+            split_ratio=self.current_ratio,
+        )
+
     def on_files_dropped(self, paths: List[Path]) -> None:
         """接收拖拽或选择的文件并使用 probe 解析入队。"""
         valid_count = 0
@@ -262,9 +312,13 @@ class MainWindow(QMainWindow):
 
         self.update_ui_state()
         if skipped_count > 0:
-            self.statusBar().showMessage(f"已添加 {valid_count} 个任务，跳过 {skipped_count} 个无法解析的文件")
+            msg = f"已添加 {valid_count} 个任务，跳过 {skipped_count} 个无法解析的文件"
+            self.statusBar().showMessage(msg)
+            self.lbl_status.setText(f"{msg} (共 {self.task_table.rowCount()} 项)")
         elif valid_count > 0:
-            self.statusBar().showMessage(f"已添加 {valid_count} 个任务")
+            msg = f"已添加 {valid_count} 个任务"
+            self.statusBar().showMessage(msg)
+            self.lbl_status.setText(f"{msg} (共 {self.task_table.rowCount()} 项)")
 
     def update_ui_state(self) -> None:
         is_processing = self._is_processing and (self.worker is not None and bool(self.worker.isRunning()))

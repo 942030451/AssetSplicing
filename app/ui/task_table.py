@@ -25,6 +25,7 @@ class TaskTable(QTableWidget):
     """展示批量处理任务的表格控件。"""
 
     sig_tasks_changed = Signal()
+    sig_preview_requested = Signal(str)
 
     COL_FILENAME = 0
     COL_TYPE = 1
@@ -50,6 +51,7 @@ class TaskTable(QTableWidget):
         self.setShowGrid(False)
 
         header = self.horizontalHeader()
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setSectionResizeMode(self.COL_FILENAME, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(self.COL_TYPE, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(self.COL_ORIG_RES, QHeaderView.ResizeMode.ResizeToContents)
@@ -57,7 +59,7 @@ class TaskTable(QTableWidget):
         header.setSectionResizeMode(self.COL_STATUS, QHeaderView.ResizeMode.Interactive)
         header.resizeSection(self.COL_STATUS, 160)
         header.setSectionResizeMode(self.COL_ACTION, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(self.COL_ACTION, 80)
+        header.resizeSection(self.COL_ACTION, 140)
 
     def calculate_target_resolution(self, media_info: MediaInfo, split_ratio: int) -> str:
         """根据原分辨率和分切比例计算输出拼接分辨率。"""
@@ -87,46 +89,57 @@ class TaskTable(QTableWidget):
         # 文件名
         item_name = QTableWidgetItem(p.name)
         item_name.setToolTip(str(p))
+        item_name.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         item_name.setData(Qt.ItemDataRole.UserRole, task_id)
         self.setItem(row, self.COL_FILENAME, item_name)
 
         # 类型
         type_str = "视频" if media_info.is_video else "图片"
         item_type = QTableWidgetItem(type_str)
-        item_type.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item_type.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setItem(row, self.COL_TYPE, item_type)
 
         # 原分辨率
         orig_res_str = f"{media_info.width} × {media_info.height}"
         item_orig = QTableWidgetItem(orig_res_str)
-        item_orig.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item_orig.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setItem(row, self.COL_ORIG_RES, item_orig)
 
         # 拼接后规格
         target_res_str = self.calculate_target_resolution(media_info, split_ratio)
         item_target = QTableWidgetItem(target_res_str)
-        item_target.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item_target.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setItem(row, self.COL_TARGET_RES, item_target)
 
         # 状态 / 进度
         item_status = QTableWidgetItem("等待中")
-        item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item_status.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         item_status.setForeground(Qt.GlobalColor.gray)
         self.setItem(row, self.COL_STATUS, item_status)
 
-        # 操作：移除按钮
+        # 操作：预览与移除按钮组
+        btn_preview = QPushButton("预览")
+        btn_preview.setEnabled(self._actions_enabled)
+        btn_preview.setStyleSheet(
+            "QPushButton { background-color: #1e3a8a; color: #bfdbfe; border: 1px solid #2563eb; padding: 2px 8px; border-radius: 4px; font-size: 12px; }"
+            "QPushButton:hover { background-color: #2563eb; color: #ffffff; }"
+        )
+        btn_preview.clicked.connect(lambda checked=False, tid=task_id: self.sig_preview_requested.emit(tid))
+
         btn_remove = QPushButton("移除")
         btn_remove.setEnabled(self._actions_enabled)
         btn_remove.setStyleSheet(
-            "QPushButton { background-color: #3f3f46; color: #f4f4f5; border: none; padding: 2px 8px; border-radius: 4px; }"
-            "QPushButton:hover { background-color: #ef4444; color: #ffffff; }"
+            "QPushButton { background-color: #27272a; color: #d4d4d8; border: 1px solid #3f3f46; padding: 2px 8px; border-radius: 4px; font-size: 12px; }"
+            "QPushButton:hover { background-color: #dc2626; color: #ffffff; border-color: #dc2626; }"
         )
         btn_remove.clicked.connect(lambda checked=False, tid=task_id: self.remove_task(tid))
 
         action_widget = QWidget()
         action_layout = QHBoxLayout(action_widget)
         action_layout.setContentsMargins(4, 2, 4, 2)
-        action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        action_layout.setSpacing(6)
+        action_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        action_layout.addWidget(btn_preview)
         action_layout.addWidget(btn_remove)
         self.setCellWidget(row, self.COL_ACTION, action_widget)
 
@@ -144,6 +157,10 @@ class TaskTable(QTableWidget):
 
         self.sig_tasks_changed.emit()
         return task_id
+
+    def get_task_item(self, task_id: str) -> Optional[dict]:
+        """获取指定任务的详细数据字典。"""
+        return self._task_items.get(task_id)
 
     def get_row_by_task_id(self, task_id: str) -> int:
         for r in range(self.rowCount()):
@@ -173,8 +190,7 @@ class TaskTable(QTableWidget):
         for r in range(self.rowCount()):
             widget = self.cellWidget(r, self.COL_ACTION)
             if widget:
-                btn = widget.findChild(QPushButton)
-                if btn:
+                for btn in widget.findChildren(QPushButton):
                     btn.setEnabled(enabled)
 
     def update_split_ratio(self, split_ratio: int) -> None:
@@ -259,8 +275,8 @@ class TaskTable(QTableWidget):
         row = self.get_row_by_task_id(task_id)
         if row != -1:
             self.removeCellWidget(row, self.COL_STATUS)
-            item = QTableWidgetItem("已完成")
-            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item = QTableWidgetItem("已完成 ✔")
+            item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             item.setForeground(Qt.GlobalColor.green)
             item.setToolTip(f"输出文件：{output_path}")
             self.setItem(row, self.COL_STATUS, item)

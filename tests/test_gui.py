@@ -67,6 +67,11 @@ def test_main_window_instantiation(qtbot):
     assert isinstance(window.btn_open_dir, QPushButton)
 
     # 初始状态检查
+    assert window.windowTitle() == "Asset Splicer-分割拼接工具"
+    assert window.radio_ratio_2.text() == "1/2"
+    assert window.radio_ratio_3.text() == "1/3"
+    assert window.radio_ratio_4.text() == "1/4"
+    assert not window.windowIcon().isNull()
     assert not window.btn_start.isEnabled()
     assert not window.btn_cancel.isEnabled()
 
@@ -329,6 +334,25 @@ def test_app_main_creation():
     app = create_app([])
     assert app is not None
     assert app.applicationName() == "Asset Splicer"
+    assert app.applicationDisplayName() == "Asset Splicer-分割拼接工具"
+    assert not app.windowIcon().isNull()
+
+
+def test_preview_dialog_trigger(qtbot, tmp_path, sample_video_info):
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    f1 = tmp_path / "task.mp4"
+    f1.write_text("video")
+    task_id = window.task_table.add_task_item(f1, sample_video_info, split_ratio=2)
+
+    with patch("app.ui.preview_dialog.PreviewDialog.generate_and_show") as mock_preview:
+        window.task_table.sig_preview_requested.emit(task_id)
+        mock_preview.assert_called_once()
+        kwargs = mock_preview.call_args[1]
+        assert kwargs["file_path"] == f1.resolve()
+        assert kwargs["media_info"] == sample_video_info
+        assert kwargs["split_ratio"] == 2
 
 
 def test_close_event_cancels_running_worker(qtbot, tmp_path, sample_video_info):

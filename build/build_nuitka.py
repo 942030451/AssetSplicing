@@ -33,6 +33,16 @@ def build_command(
     if assume_yes:
         cmd.append("--assume-yes-for-downloads")
 
+    # 配置应用图标与资源
+    project_root = Path(__file__).resolve().parent.parent
+    icon_ico = project_root / "app" / "resources" / "icon.ico"
+    if icon_ico.is_file():
+        cmd.append(f"--windows-icon-from-ico={icon_ico}")
+
+    res_dir = project_root / "app" / "resources"
+    if res_dir.is_dir():
+        cmd.append(f"--include-data-dir={res_dir}=app/resources")
+
     cmd.extend([
         f"--output-dir={output_dir}",
         f"--output-filename={output_filename}",
@@ -125,6 +135,15 @@ def assemble_portable_package(
     if target_tools.exists():
         shutil.rmtree(target_tools)
     shutil.copytree(src_tools, target_tools)
+
+    # 确保 app/resources 图标与静态资源完整拷贝
+    project_root = Path(__file__).resolve().parent.parent
+    src_res = project_root / "app" / "resources"
+    if src_res.is_dir():
+        target_res = target_portable / "app" / "resources"
+        if target_res.exists():
+            shutil.rmtree(target_res)
+        shutil.copytree(src_res, target_res)
 
     return target_portable
 

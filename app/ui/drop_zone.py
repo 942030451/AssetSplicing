@@ -74,7 +74,7 @@ class DropZone(QFrame):
         self.lbl_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #f4f4f5; background: transparent;")
 
         self.lbl_subtitle = QLabel(
-            "支持格式：MP4, MOV, MKV, AVI, FLV, WebM, PNG, JPG, WebP, BMP", self
+            "支持格式：MP4, MOV, MKV, AVI, FLV, WebM, PNG, JPG/JPEG, WebP, BMP", self
         )
         self.lbl_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_subtitle.setStyleSheet("font-size: 12px; color: #a1a1aa; background: transparent;")

@@ -59,7 +59,7 @@ class TaskTable(QTableWidget):
         header.setSectionResizeMode(self.COL_STATUS, QHeaderView.ResizeMode.Interactive)
         header.resizeSection(self.COL_STATUS, 160)
         header.setSectionResizeMode(self.COL_ACTION, QHeaderView.ResizeMode.Fixed)
-        header.resizeSection(self.COL_ACTION, 150)
+        header.resizeSection(self.COL_ACTION, 160)
         self.verticalHeader().setDefaultSectionSize(44)
 
     def calculate_target_resolution(self, media_info: MediaInfo, split_ratio: int) -> str:
@@ -122,18 +122,18 @@ class TaskTable(QTableWidget):
         # 操作：预览与移除按钮组
         btn_preview = QPushButton("预览")
         btn_preview.setEnabled(self._actions_enabled)
-        btn_preview.setFixedSize(54, 26)
+        btn_preview.setFixedSize(64, 28)
         btn_preview.setStyleSheet(
-            "QPushButton { background-color: #1e3a8a; color: #bfdbfe; border: 1px solid #2563eb; border-radius: 4px; font-size: 12px; font-weight: 500; }"
+            "QPushButton { background-color: #1e3a8a; color: #bfdbfe; border: 1px solid #2563eb; border-radius: 4px; font-size: 12px; font-weight: 500; padding: 0px 4px; text-align: center; }"
             "QPushButton:hover { background-color: #2563eb; color: #ffffff; }"
         )
         btn_preview.clicked.connect(lambda checked=False, tid=task_id: self.sig_preview_requested.emit(tid))
 
         btn_remove = QPushButton("移除")
         btn_remove.setEnabled(self._actions_enabled)
-        btn_remove.setFixedSize(54, 26)
+        btn_remove.setFixedSize(64, 28)
         btn_remove.setStyleSheet(
-            "QPushButton { background-color: #27272a; color: #d4d4d8; border: 1px solid #3f3f46; border-radius: 4px; font-size: 12px; font-weight: 500; }"
+            "QPushButton { background-color: #27272a; color: #d4d4d8; border: 1px solid #3f3f46; border-radius: 4px; font-size: 12px; font-weight: 500; padding: 0px 4px; text-align: center; }"
             "QPushButton:hover { background-color: #dc2626; color: #ffffff; border-color: #dc2626; }"
         )
         btn_remove.clicked.connect(lambda checked=False, tid=task_id: self.remove_task(tid))
@@ -141,7 +141,7 @@ class TaskTable(QTableWidget):
         action_widget = QWidget()
         action_widget.setStyleSheet("background: transparent;")
         action_layout = QHBoxLayout(action_widget)
-        action_layout.setContentsMargins(4, 2, 4, 2)
+        action_layout.setContentsMargins(2, 2, 2, 2)
         action_layout.setSpacing(8)
         action_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         action_layout.addWidget(btn_preview)

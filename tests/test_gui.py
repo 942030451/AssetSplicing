@@ -240,6 +240,20 @@ def test_start_and_cancel_button_state_toggle(qtbot, tmp_path, sample_video_info
         assert not window.drop_zone.isEnabled()
         assert not window.task_table._actions_enabled
 
+        # 启动后各项选择保持选中显示但处于禁用状态，无法被修改
+        assert window.radio_ratio_2.isChecked()
+        assert not window.radio_ratio_2.isEnabled()
+        assert window.radio_out_source.isChecked()
+        assert not window.radio_out_source.isEnabled()
+        assert window.radio_bitrate_original.isChecked()
+        assert not window.radio_bitrate_original.isEnabled()
+
+        # 表格内操作按钮（预览/移除）处于禁用状态
+        action_widget = window.task_table.cellWidget(0, window.task_table.COL_ACTION)
+        assert action_widget is not None
+        for btn in action_widget.findChildren(QPushButton):
+            assert not btn.isEnabled()
+
         # 模拟点击中止
         window.btn_cancel.click()
         mock_thread_instance.cancel.assert_called_once()

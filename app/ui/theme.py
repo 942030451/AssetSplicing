@@ -164,12 +164,17 @@ QRadioButton::indicator:checked {
 }
 
 QRadioButton:disabled {
-    color: #52525b;
+    color: #71717a;
 }
 
 QRadioButton::indicator:disabled {
-    border-color: #3f3f46;
+    border: 2px solid #3f3f46;
     background-color: #18181b;
+}
+
+QRadioButton::indicator:checked:disabled {
+    border: 2px solid #2563eb;
+    background-color: #1d4ed8;
 }
 
 /* 任务队列表格控件 */

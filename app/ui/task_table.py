@@ -131,6 +131,7 @@ class TaskTable(QTableWidget):
         btn_preview.setStyleSheet(
             "QPushButton { background-color: #1e3a8a; color: #bfdbfe; border: 1px solid #2563eb; border-radius: 4px; font-size: 12px; font-weight: 500; padding: 0px 4px; text-align: center; }"
             "QPushButton:hover { background-color: #2563eb; color: #ffffff; }"
+            "QPushButton:disabled { background-color: #161e2e; color: #475569; border-color: #1e293b; }"
         )
         btn_preview.clicked.connect(lambda checked=False, tid=task_id: self.sig_preview_requested.emit(tid))
 
@@ -140,6 +141,7 @@ class TaskTable(QTableWidget):
         btn_remove.setStyleSheet(
             "QPushButton { background-color: #27272a; color: #d4d4d8; border: 1px solid #3f3f46; border-radius: 4px; font-size: 12px; font-weight: 500; padding: 0px 4px; text-align: center; }"
             "QPushButton:hover { background-color: #dc2626; color: #ffffff; border-color: #dc2626; }"
+            "QPushButton:disabled { background-color: #18181b; color: #52525b; border-color: #27272a; }"
         )
         btn_remove.clicked.connect(lambda checked=False, tid=task_id: self.remove_task(tid))
 

@@ -179,10 +179,12 @@ def test_add_files_via_probe(qtbot, tmp_path, sample_video_info, sample_image_in
     assert window.btn_start.isEnabled()
     assert "跳过 1 个无法解析的文件" in window.statusBar().currentMessage()
 
-    # 重复添加 clip.mp4 不应重复入队
+    # 重复添加 clip.mp4 不应重复入队，并提示跳过重复文件而不是无法解析
     with patch.object(window.probe, "probe", side_effect=mock_probe):
         window.on_files_dropped([v_file])
     assert window.task_table.rowCount() == 2
+    assert "跳过 1 个重复文件" in window.lbl_status.text()
+    assert "已添加 2 个任务" in window.lbl_status.text()
 
 
 def test_task_table_item_removal_and_clear(qtbot, tmp_path, sample_video_info):
@@ -353,6 +355,41 @@ def test_preview_dialog_trigger(qtbot, tmp_path, sample_video_info):
         assert kwargs["file_path"] == f1.resolve()
         assert kwargs["media_info"] == sample_video_info
         assert kwargs["split_ratio"] == 2
+
+
+def test_preview_dialog_fit_mode_and_cleanup(qtbot, tmp_path, sample_image_info):
+    from app.ui.preview_dialog import PreviewDialog
+    from PySide6.QtGui import QImage
+
+    # 创建一个测试图片
+    img_file = tmp_path / "test_preview.jpg"
+    qimg = QImage(200, 400, QImage.Format.Format_RGB32)
+    qimg.fill(Qt.GlobalColor.blue)
+    qimg.save(str(img_file))
+
+    dlg = PreviewDialog(
+        image_path=img_file,
+        file_name="test_preview.jpg",
+        media_info=sample_image_info,
+        split_ratio=2,
+    )
+    qtbot.addWidget(dlg)
+
+    # 默认适应窗口整体预览模式
+    assert dlg.is_fit_mode is True
+    assert dlg.temp_image_path.is_file()
+
+    # 切换到 1:1 模式
+    dlg.toggle_view_mode()
+    assert dlg.is_fit_mode is False
+
+    # 切换回整体预览
+    dlg.toggle_view_mode()
+    assert dlg.is_fit_mode is True
+
+    # 测试清理临时文件
+    dlg.cleanup_temp_file()
+    assert not img_file.exists()
 
 
 def test_close_event_cancels_running_worker(qtbot, tmp_path, sample_video_info):

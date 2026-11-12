@@ -112,12 +112,15 @@ class MainWindow(QMainWindow):
         ratio_layout = QHBoxLayout()
         ratio_layout.setSpacing(16)
         ratio_label = QLabel("分割比例：", config_group)
-        ratio_label.setStyleSheet("font-weight: 600; color: #94a3b8;")
+        ratio_label.setStyleSheet("font-weight: 600; color: #94a3b8; background: transparent;")
         ratio_layout.addWidget(ratio_label)
 
         self.radio_ratio_2 = QRadioButton("1/2", config_group)
         self.radio_ratio_3 = QRadioButton("1/3", config_group)
         self.radio_ratio_4 = QRadioButton("1/4", config_group)
+        self.radio_ratio_2.setStyleSheet("background: transparent;")
+        self.radio_ratio_3.setStyleSheet("background: transparent;")
+        self.radio_ratio_4.setStyleSheet("background: transparent;")
         self.radio_ratio_2.setChecked(True)
 
         self.ratio_group = QButtonGroup(self)
@@ -139,11 +142,13 @@ class MainWindow(QMainWindow):
         out_layout = QHBoxLayout()
         out_layout.setSpacing(16)
         out_label = QLabel("导出路径：", config_group)
-        out_label.setStyleSheet("font-weight: 600; color: #94a3b8;")
+        out_label.setStyleSheet("font-weight: 600; color: #94a3b8; background: transparent;")
         out_layout.addWidget(out_label)
 
         self.radio_out_source = QRadioButton("与原文件同目录", config_group)
         self.radio_out_custom = QRadioButton("自定义目录", config_group)
+        self.radio_out_source.setStyleSheet("background: transparent;")
+        self.radio_out_custom.setStyleSheet("background: transparent;")
         self.radio_out_source.setChecked(True)
 
         self.out_group = QButtonGroup(self)
@@ -296,29 +301,39 @@ class MainWindow(QMainWindow):
 
     def on_files_dropped(self, paths: List[Path]) -> None:
         """接收拖拽或选择的文件并使用 probe 解析入队。"""
-        valid_count = 0
-        skipped_count = 0
+        new_valid_count = 0
+        duplicate_count = 0
+        unparsed_count = 0
+
         for p in paths:
             info = self.probe.probe(p)
             if info is not None:
                 tid = self.task_table.add_task_item(p, info, split_ratio=self.current_ratio)
                 if tid:
-                    valid_count += 1
+                    new_valid_count += 1
                 else:
-                    skipped_count += 1
+                    duplicate_count += 1
             else:
-                skipped_count += 1
+                unparsed_count += 1
             QApplication.processEvents()
 
         self.update_ui_state()
-        if skipped_count > 0:
-            msg = f"已添加 {valid_count} 个任务，跳过 {skipped_count} 个无法解析的文件"
-            self.statusBar().showMessage(msg)
-            self.lbl_status.setText(f"{msg} (共 {self.task_table.rowCount()} 项)")
-        elif valid_count > 0:
-            msg = f"已添加 {valid_count} 个任务"
-            self.statusBar().showMessage(msg)
-            self.lbl_status.setText(f"{msg} (共 {self.task_table.rowCount()} 项)")
+
+        total_items = self.task_table.rowCount()
+        details: List[str] = []
+        if duplicate_count > 0:
+            details.append(f"跳过 {duplicate_count} 个重复文件")
+        if unparsed_count > 0:
+            details.append(f"跳过 {unparsed_count} 个无法解析的文件")
+
+        if details:
+            detail_str = "，".join(details)
+            msg = f"已添加 {total_items} 个任务，{detail_str}"
+        else:
+            msg = f"已添加 {total_items} 个任务"
+
+        self.statusBar().showMessage(msg)
+        self.lbl_status.setText(f"{msg} (共 {total_items} 项)")
 
     def update_ui_state(self) -> None:
         is_processing = self._is_processing and (self.worker is not None and bool(self.worker.isRunning()))

@@ -30,6 +30,10 @@ QGroupBox {
     color: #f4f4f5;
 }
 
+QGroupBox QLabel, QGroupBox QRadioButton {
+    background-color: transparent;
+}
+
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
@@ -136,6 +140,7 @@ QLineEdit:disabled {
 
 /* 单选框与选项 */
 QRadioButton {
+    background-color: transparent;
     spacing: 8px;
     color: #e4e4e7;
     font-size: 13px;
@@ -220,6 +225,7 @@ QStatusBar {
 }
 
 QLabel {
+    background-color: transparent;
     color: #f4f4f5;
 }
 

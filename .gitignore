@@ -28,3 +28,9 @@ tools/*.exe
 # IDE
 .vscode/
 .idea/
+
+# Documents & Internal Notes (Per user requirement: do not commit doc)
+docs/
+*.doc
+*.docx
+.superpowers/
